@@ -56,49 +56,47 @@ class MovieExplorer {
     this.movieSearchCache.clear();
     this.movieDetailsCache.clear();
 }
-    async movieSearch(movieName:string):Promise <MoviesResponse | null>{
+    private async fetchJson<T>(url: string): Promise<T | null>{
         try {
+            const response = await fetch(url, {
+                headers: this.headers
+            })
+            if (response.ok) {
+                return await response.json() as T
+            }
+                return handleError(`fetchJson HTTP ${response.status} for ${url}`)
+  
+        } catch (error) {
+            return handleError(`fetchJson error for ${url}`, error);
+        }
+    }
+    async movieSearch(movieName:string):Promise <MoviesResponse | null>{
             const cached = this.movieSearchCache.get(movieName)
             if (cached) {
                 this.pushInHistory({message: `movieSearch ${movieName}`, fromCache: true})
                 return cached
             }
-            const response = await fetch(`${this.baseUrl}/search/movie?query=${encodeURIComponent(movieName)}`, {
-            headers: this.headers
-            })
-            if (response.ok) {
-                const answer:MoviesResponse = await response.json()
-                this.movieSearchCache.set(movieName, answer)
+            const answer = await this.fetchJson<MoviesResponse>(`${this.baseUrl}/search/movie?query=${encodeURIComponent(movieName)}`)
+                if (answer) {
+                    this.movieSearchCache.set(movieName, answer)
                 this.pushInHistory({message: `movieSearch ${movieName}`, fromCache: false})
                 return answer
-            }
-            return handleError("movieSearch response is not okay")
-        } catch (error) {
-            return handleError("movieSearch try/catch error", error)
-        }
-
+                }
+                return null
     }
     async getMovieDetails(movieId: number): Promise<MovieDetails | null>{
-        try {
         const cached = this.movieDetailsCache.get(movieId)
         if (cached) {
             this.pushInHistory({message: `getMovieDetails ${movieId}`, fromCache: true})
             return cached
         }
-        const response = await fetch(`${this.baseUrl}/movie/${movieId}`, {
-            headers: this.headers
-            })
-            if (response.ok) {
-                const answer:MovieDetails = await response.json()
+        const answer = await this.fetchJson<MovieDetails>(`${this.baseUrl}/movie/${movieId}`)
+            if (answer) {
                 this.movieDetailsCache.set(movieId, answer)
                 this.pushInHistory({message: `getMovieDetails ${movieId}`, fromCache: false})
-
                 return answer
             }
-            return handleError("getMovieDetails response not ok error")
-        } catch (error) {
-            return handleError("getMovieDetails try/catch error", error)
-        }
+            return null
         
 
     }
@@ -110,18 +108,10 @@ class MovieExplorer {
         return answer?.results[0] ?? null;
     }
     async getMany(movieIds: number[]):Promise<(MovieDetails | null)[]>{
-        const promises = movieIds.map(el=> this.getMovieDetails(el))
-        return await Promise.all(promises)
+        return Promise.all(movieIds.map(id => this.getMovieDetails(id)))
     }
 }
 
 const explorer = new MovieExplorer()
 const film1 =  await explorer.getFirstFromList("cat")
 const film2 =  await explorer.getFirstFromList("iron man")
-
-if (film1 && film2) {    
-await explorer.getMovieDetails(film1.id)
-await explorer.getMovieDetails(film1.id)
-console.log(await explorer.getMany([film1.id, film2.id]));
-console.log(explorer.getHistory());
-}
